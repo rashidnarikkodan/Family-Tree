@@ -12,3 +12,13 @@ export const calculateAge = (dob) => {
   
   return differenceInYears(new Date(), birthDate);
 };
+
+export const formatFirestoreDate = (timestamp) => {
+  if (!timestamp) return 'No date';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return date.toLocaleDateString(undefined, { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric' 
+  });
+};

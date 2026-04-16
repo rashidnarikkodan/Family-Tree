@@ -1,21 +1,20 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ReactFlow, 
-  Controls, 
-  Background, 
-  applyNodeChanges, 
-  applyEdgeChanges,
+import {
+  ReactFlow,
+  Controls,
+  Background,
   addEdge,
   useNodesState,
-  useEdgesState
+  useEdgesState,
+  Panel
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { useAuth } from '../context/AuthContext';
-import { getFamilyMembers, addFamilyMember, updateFamilyMember } from '../services/firestore.service';
+import { getFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMember } from '../services/firestore.service';
 import CustomNode from '../components/CustomNode';
-import { ArrowLeft, UserPlus } from 'lucide-react';
+import { ArrowLeft, UserPlus, Sparkles, Plus } from 'lucide-react';
 
 const nodeTypes = {
   person: CustomNode,
@@ -32,8 +31,9 @@ export default function FamilyGraphView() {
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [newNodeRole, setNewNodeRole] = useState(null); // 'root', 'child', 'spouse'
-  const [activeNode, setActiveNode] = useState(null); // Parent or Spouse node
+  const [activeNode, setActiveNode] = useState(null); // Parent, Spouse or Node being edited
 
   const [formData, setFormData] = useState({ name: '', dob: '', jobOrStudy: '' });
 
@@ -41,59 +41,116 @@ export default function FamilyGraphView() {
     setLoading(true);
     const members = await getFamilyMembers(familyId);
     
-    // Naive layout engine
-    // Map generation to levels
-    const gMap = { 0: [], 1: [], 2: [], 3: [], 4: [] };
+    const gMap = {};
     const memberMap = {};
+    const childrenOf = {}; // parentId -> [memberIds]
     
     members.forEach(m => {
       const g = m.generationLevel || 0;
       if (!gMap[g]) gMap[g] = [];
       gMap[g].push(m);
       memberMap[m.id] = m;
+      
+      if (m.parentId) {
+        if (!childrenOf[m.parentId]) childrenOf[m.parentId] = [];
+        childrenOf[m.parentId].push(m.id);
+      }
     });
 
     const newNodes = [];
     const newEdges = [];
 
     // Assign positions based on generation grid
-    Object.keys(gMap).forEach(genStr => {
+    Object.keys(gMap).sort((a,b) => a-b).forEach(genStr => {
       const gen = parseInt(genStr, 10);
       const rowNodes = gMap[gen];
-      const startX = -(rowNodes.length * 300) / 2;
+      const startX = -(rowNodes.length * 450) / 2;
 
       rowNodes.forEach((m, idx) => {
         newNodes.push({
           id: m.id,
           type: 'person',
-          position: m.position || { x: startX + idx * 300, y: gen * 200 }, // Fallback layout
+          position: m.position || { x: startX + idx * 450, y: gen * 350 },
           data: {
             ...m,
-            onAddRelative: (role) => openModal(role, m)
+            onAddRelative: (role) => openModal(role, m),
+            onDeleteMember: () => handleDeleteMember(m.id),
+            onEditMember: () => openEditModal(m)
           }
         });
 
-        // Add edges
+        // 1. Primary Parentage
         if (m.parentId && memberMap[m.parentId]) {
           newEdges.push({
-            id: `e-${m.parentId}-${m.id}`,
+            id: `e-p-${m.parentId}-${m.id}`,
             source: m.parentId,
             target: m.id,
-            style: { stroke: 'var(--color-edge)', strokeWidth: 2 },
+            label: 'Parent',
+            type: 'smoothstep',
+            labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
+            labelBgPadding: [8, 4],
+            labelBgBorderRadius: 4,
+            labelBgStyle: { fill: 'var(--color-accent)', fillOpacity: 0.7 },
+            style: { stroke: 'var(--color-accent)', strokeWidth: 4, opacity: 0.8 },
             animated: true
           });
+
+          // 2. Implicit Shared Parentage (from Parent's Spouse)
+          const primaryParent = memberMap[m.parentId];
+          if (primaryParent.spouseId && memberMap[primaryParent.spouseId]) {
+            newEdges.push({
+              id: `e-p2-${primaryParent.spouseId}-${m.id}`,
+              source: primaryParent.spouseId,
+              target: m.id,
+              label: 'Parent',
+              type: 'smoothstep',
+              labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
+              labelBgPadding: [8, 4],
+              labelBgBorderRadius: 4,
+              labelBgStyle: { fill: 'var(--color-accent)', fillOpacity: 0.4 },
+              style: { stroke: 'var(--color-accent)', strokeWidth: 2, strokeDasharray: '5,5', opacity: 0.4 },
+            });
+          }
         }
+
+        // 3. Spousal Connections
         if (m.spouseId && memberMap[m.spouseId]) {
           newEdges.push({
-            id: `e-spouse-${m.id}-${m.spouseId}`,
+            id: `e-s-${m.id}-${m.spouseId}`,
             source: m.id,
             target: m.spouseId,
+            label: 'Spouse',
             sourceHandle: 'spouse',
             targetHandle: 'spouse',
-            style: { stroke: 'var(--color-edge-active)', strokeWidth: 2, strokeDasharray: '5,5' },
+            labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
+            labelBgPadding: [8, 4],
+            labelBgBorderRadius: 4,
+            labelBgStyle: { fill: 'var(--color-danger)', fillOpacity: 0.8 },
+            style: { stroke: 'var(--color-danger)', strokeWidth: 4, strokeDasharray: '8,8', opacity: 0.8 },
           });
         }
       });
+    });
+
+    // 4. Sibling Logical Connections
+    Object.keys(childrenOf).forEach(pid => {
+      const siblings = childrenOf[pid];
+      if (siblings.length > 1) {
+        for (let i = 0; i < siblings.length - 1; i++) {
+          newEdges.push({
+            id: `e-sib-${siblings[i]}-${siblings[i+1]}`,
+            source: siblings[i],
+            target: siblings[i+1],
+            label: 'Sibling',
+            type: 'straight',
+            labelStyle: { fill: '#94a3b8', fontWeight: 700, fontSize: 9 },
+            labelBgPadding: [6, 2],
+            labelBgBorderRadius: 2,
+            labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.9 },
+            style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '4,4', opacity: 0.5 },
+          });
+        }
+      }
     });
 
     setNodes(newNodes);
@@ -115,10 +172,34 @@ export default function FamilyGraphView() {
     }
   }, []);
 
+  const handleDeleteMember = async (memberId) => {
+    if (window.confirm('Are you sure you want to delete this family member? All connections will be severed.')) {
+      try {
+        await deleteFamilyMember(memberId);
+        await loadGraph();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
   const openModal = (role, node = null) => {
     setNewNodeRole(role);
     setActiveNode(node);
+    setIsEditing(false);
     setFormData({ name: '', dob: '', jobOrStudy: '' });
+    setShowModal(true);
+  };
+
+  const openEditModal = (member) => {
+    setNewNodeRole(null);
+    setActiveNode(member);
+    setIsEditing(true);
+    setFormData({ 
+      name: member.name || '', 
+      dob: member.dob || '', 
+      jobOrStudy: member.jobOrStudy || '' 
+    });
     setShowModal(true);
   };
 
@@ -126,32 +207,38 @@ export default function FamilyGraphView() {
     e.preventDefault();
     if (!formData.name.trim()) return;
 
-    let memberData = {
-      ...formData,
-      generationLevel: 0,
-      position: { x: 0, y: 0 }
-    };
-
-    if (activeNode) {
-      const uiNode = nodes.find(n => n.id === activeNode.id);
-      const parentPos = uiNode ? uiNode.position : { x: 0, y: 0 };
-      
-      if (newNodeRole === 'child') {
-        memberData.parentId = activeNode.id;
-        memberData.generationLevel = (activeNode.generationLevel || 0) + 1;
-        memberData.position = { x: parentPos.x + Math.random()*100 - 50, y: parentPos.y + 200 };
-      } else if (newNodeRole === 'spouse') {
-        memberData.spouseId = activeNode.id;
-        memberData.generationLevel = activeNode.generationLevel;
-        memberData.position = { x: parentPos.x + 300, y: parentPos.y };
-      }
-    }
-
     try {
-      const doc = await addFamilyMember(familyId, memberData);
-      
-      // Update spouse bi-directional if it's a spouse
-      // Skipped updating firestore for simplicity, we mock it via UI update
+      if (isEditing) {
+        await updateFamilyMember(activeNode.id, formData);
+      } else {
+        let memberData = {
+          ...formData,
+          generationLevel: 0,
+          position: { x: 0, y: 300 }
+        };
+
+        if (activeNode) {
+          const uiNode = nodes.find(n => n.id === activeNode.id);
+          const parentPos = uiNode ? uiNode.position : { x: 0, y: 0 };
+          
+          if (newNodeRole === 'child') {
+            memberData.parentId = activeNode.id;
+            memberData.generationLevel = (activeNode.generationLevel || 0) + 1;
+            memberData.position = { x: parentPos.x + (Math.random()*40 - 20), y: parentPos.y + 300 };
+          } else if (newNodeRole === 'spouse') {
+            memberData.spouseId = activeNode.id;
+            memberData.generationLevel = activeNode.generationLevel;
+            memberData.position = { x: parentPos.x + 400, y: parentPos.y };
+          }
+        }
+
+        const newMember = await addFamilyMember(familyId, memberData);
+        
+        // Bi-directional spouse update
+        if (newNodeRole === 'spouse' && activeNode) {
+          await updateFamilyMember(activeNode.id, { spouseId: newMember.id });
+        }
+      }
       
       await loadGraph();
       setShowModal(false);
@@ -161,28 +248,50 @@ export default function FamilyGraphView() {
   };
 
   return (
-    <div className="w-full h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] relative">
-      <header className="absolute top-0 left-0 w-full p-4 z-10 flex items-center justify-between pointer-events-none">
-        <button 
-          onClick={() => navigate('/dashboard')}
-          className="pointer-events-auto bg-[var(--color-node-900)] border border-[var(--color-border)] px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[var(--color-hover)] transition shadow-xl"
-        >
-          <ArrowLeft size={18} />
-          Back
-        </button>
+    <div className="w-full h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] relative overflow-hidden selection:bg-[var(--color-accent)] selection:text-white">
+      {/* Dynamic Background */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[var(--color-accent)] opacity-[0.03] rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[var(--color-danger)] opacity-[0.03] rounded-full blur-[120px]"></div>
+      </div>
 
-        {nodes.length === 0 && !loading && (
-          <button 
-            onClick={() => openModal('root')}
-            className="pointer-events-auto bg-[var(--color-selected)] text-black px-6 py-3 rounded-lg flex items-center gap-2 hover:scale-105 transition font-bold shadow-xl animate-bounce"
+      <header className="absolute top-6 left-6 right-6 z-20 flex items-center justify-between pointer-events-none">
+        <div className="flex items-center gap-4 pointer-events-auto">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="w-12 h-12 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center hover:bg-[var(--color-accent)] hover:border-[var(--color-accent)] transition-all shadow-2xl group active:scale-95"
           >
-            <UserPlus size={20} />
-            Add First Ancestor
+            <ArrowLeft size={20} className="group-hover:translate-x-[-2px] transition-transform" />
           </button>
-        )}
+          <div className="bg-[var(--color-surface)]/80 backdrop-blur-xl border border-[var(--color-border)] px-6 py-3 rounded-2xl shadow-2xl hidden md:flex items-center gap-3">
+            <Sparkles size={18} className="text-[var(--color-accent)]" />
+            <span className="font-black tracking-tight uppercase text-xs">Family Explorer Pro</span>
+          </div>
+        </div>
+
+        <div className="pointer-events-auto flex gap-3">
+          {nodes.length > 0 && (
+            <button
+              onClick={() => openModal('root')}
+              className="bg-[var(--color-accent)] border border-[var(--color-accent)] px-6 py-3 rounded-2xl flex items-center gap-2 hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all font-bold text-sm shadow-2xl active:scale-95 text-white"
+            >
+              <Plus size={18} />
+              Add Member
+            </button>
+          )}
+          {nodes.length === 0 && !loading && (
+            <button
+              onClick={() => openModal('root')}
+              className="bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-hover)] text-white px-8 py-4 rounded-2xl flex items-center gap-3 hover:scale-105 transition-all font-black shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-pulse"
+            >
+              <UserPlus size={22} />
+              Initialize Lineage
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="flex-1 w-full relative">
+      <div className="flex-1 w-full relative z-10">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -192,63 +301,73 @@ export default function FamilyGraphView() {
           onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
           fitView
-          className="bg-[var(--color-bg)]"
+          className="bg-transparent"
         >
-          <Background color="var(--color-border)" gap={24} size={2} />
-          <Controls className="fill-[var(--color-text)] border-[var(--color-border)]" />
+          <Background color="var(--color-border)" gap={32} size={1} variant="dots" />
+          <Controls
+            className="!bg-[var(--color-surface)] !border-[var(--color-border)] !rounded-2xl !p-2 !shadow-2xl"
+            showInteractive={false}
+          />
+          <Panel position="bottom-right" className="bg-[var(--color-surface)]/80 backdrop-blur-md border border-[var(--color-border)] p-3 rounded-2xl shadow-2xl text-[10px] uppercase font-bold tracking-widest text-[var(--color-text-dim)]">
+            Scroll to zoom • Drag to move
+          </Panel>
         </ReactFlow>
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form 
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
+          <form
             onSubmit={handleAddMember}
-            className="bg-[var(--color-node-900)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[40px] p-10 w-full max-w-lg shadow-[0_0_100px_rgba(0,0,0,0.5)] relative overflow-hidden"
           >
-            <h3 className="text-2xl font-bold mb-4 text-[var(--color-node-300)]">
-              {newNodeRole === 'root' ? 'Start Family Tree' : `Add ${newNodeRole}`}
+            {/* Modal Glow */}
+            <div className="absolute -top-32 -left-32 w-64 h-64 bg-[var(--color-accent)] opacity-20 rounded-full blur-[80px]"></div>
+            <h3 className="text-3xl font-black mb-8 relative z-10">
+              {isEditing ? 'Recalibrate Lineage' : (newNodeRole === 'root' ? 'Initialize Ancestry' : `Expand Lineage: ${newNodeRole}`)}
             </h3>
             
-            <div className="space-y-4">
+            <div className="space-y-6 relative z-10">
               <div>
-                <label className="block text-sm mb-1 text-[var(--color-node-100)]">Name *</label>
+                <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Identify Name</label>
                 <input 
-                  type="text" required
-                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 outline-none focus:ring-2 focus:ring-[var(--color-hover)]"
+                  type="text" required placeholder="Full name of target"
+                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium"
                   value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
                 />
               </div>
-              <div>
-                <label className="block text-sm mb-1 text-[var(--color-node-100)]">Date of Birth</label>
-                <input 
-                  type="date"
-                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 outline-none focus:ring-2 focus:ring-[var(--color-hover)]"
-                  value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})}
-                  style={{ colorScheme: 'dark' }}
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1 text-[var(--color-node-100)]">Job or Study</label>
-                <input 
-                  type="text" placeholder="e.g., Software Engineer"
-                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg p-3 outline-none focus:ring-2 focus:ring-[var(--color-hover)]"
-                  value={formData.jobOrStudy} onChange={e => setFormData({...formData, jobOrStudy: e.target.value})}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Origin Date</label>
+                  <input 
+                    type="date"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium"
+                    value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})}
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Operational Role</label>
+                  <input 
+                    type="text" placeholder="e.g. Strategist"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium"
+                    value={formData.jobOrStudy} onChange={e => setFormData({...formData, jobOrStudy: e.target.value})}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 mt-8">
+            <div className="flex justify-end gap-4 mt-12 relative z-10">
               <button 
                 type="button" onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-border)] transition"
+                className="px-8 py-4 rounded-2xl bg-[var(--color-bg)] border border-[var(--color-border)] hover:bg-[var(--color-border)] transition-all font-bold text-sm"
               >
-                Cancel
+                Abort
               </button>
               <button 
                 type="submit"
-                className="px-4 py-2 rounded-lg bg-[var(--color-node-700)] hover:bg-[var(--color-node-500)] text-white shadow-lg font-semibold transition"
+                className="px-10 py-4 rounded-2xl bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-hover)] text-white shadow-2xl font-black text-sm transition-all active:scale-95"
               >
-                Save Member
+                {isEditing ? 'Sync Changes' : 'Execute Expansion'}
               </button>
             </div>
           </form>
