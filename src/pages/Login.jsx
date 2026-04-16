@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus } from 'lucide-react';
+import { LogIn, UserPlus, ArrowRight } from 'lucide-react';
 
 export default function Login() {
   const { user, authError, loginWithGoogle, loginEmailPassword, registerEmailPassword } = useAuth();
@@ -86,6 +86,15 @@ export default function Login() {
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[var(--color-danger)] opacity-10 rounded-full blur-3xl"></div>
         
         <div className="relative z-10">
+          <div className="absolute top-4 right-4">
+            <button 
+              onClick={() => navigate('/explore')} 
+              className="bg-[var(--color-bg)] hover:bg-[var(--color-border)] border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition-all"
+            >
+              Explorer <ArrowRight size={16} />
+            </button>
+          </div>
+          
           <h2 className="text-4xl font-black mb-2 text-center bg-clip-text text-transparent bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-danger)]">
             Connect
           </h2>
@@ -98,7 +107,7 @@ export default function Login() {
               {error}
             </div>
           )}
-          
+
           
           <form onSubmit={handleEmailAuth} className="space-y-5">
             <div>
@@ -161,15 +170,6 @@ export default function Login() {
               className="text-[var(--color-accent)] hover:text-[var(--color-hover)] hover:underline font-bold"
             >
               {isRegister ? 'Sign in' : 'Create account'}
-            </button>
-          </p>
-
-          <p className="mt-4 text-center text-sm text-[var(--color-text-dim)]">
-            <button 
-              onClick={() => navigate('/explore')} 
-              className="text-[var(--color-accent)] hover:text-[var(--color-hover)] hover:underline font-bold"
-            >
-              Explore without signing in
             </button>
           </p>
         </div>
