@@ -187,7 +187,14 @@ export default function FamilyGraphView() {
     setNewNodeRole(role);
     setActiveNode(node);
     setIsEditing(false);
-    setFormData({ name: '', dob: '', jobOrStudy: '' });
+    setFormData({ 
+      name: '', 
+      dob: '', 
+      jobOrStudy: '', 
+      gender: 'male',
+      phone: '',
+      email: ''
+    });
     setShowModal(true);
   };
 
@@ -198,7 +205,10 @@ export default function FamilyGraphView() {
     setFormData({ 
       name: member.name || '', 
       dob: member.dob || '', 
-      jobOrStudy: member.jobOrStudy || '' 
+      jobOrStudy: member.jobOrStudy || '',
+      gender: member.gender || 'male',
+      phone: member.phone || '',
+      email: member.email || ''
     });
     setShowModal(true);
   };
@@ -318,7 +328,7 @@ export default function FamilyGraphView() {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
           <form
             onSubmit={handleAddMember}
-            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[40px] p-10 w-full max-w-lg shadow-[0_0_100px_rgba(0,0,0,0.5)] relative overflow-hidden"
+            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[40px] p-10 w-full max-w-xl shadow-[0_0_100px_rgba(0,0,0,0.5)] relative overflow-hidden"
           >
             {/* Modal Glow */}
             <div className="absolute -top-32 -left-32 w-64 h-64 bg-[var(--color-accent)] opacity-20 rounded-full blur-[80px]"></div>
@@ -326,40 +336,72 @@ export default function FamilyGraphView() {
               {isEditing ? 'Recalibrate Lineage' : (newNodeRole === 'root' ? 'Initialize Ancestry' : `Expand Lineage: ${newNodeRole}`)}
             </h3>
             
-            <div className="space-y-6 relative z-10">
-              <div>
-                <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Identify Name</label>
-                <input 
-                  type="text" required placeholder="Full name of target"
-                  className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium"
-                  value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-                />
-              </div>
+            <div className="space-y-5 relative z-10 max-h-[60vh] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-[var(--color-border)]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Identify Name</label>
+                  <input 
+                    type="text" required placeholder="Full name of target"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium text-white"
+                    value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                  />
+                </div>
+
                 <div>
-                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Origin Date</label>
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Biological Gender</label>
+                  <select 
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium text-white appearance-none"
+                    value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Origin Date (Optional)</label>
                   <input 
                     type="date"
-                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium text-white"
                     value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})}
                     style={{ colorScheme: 'dark' }}
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Operational Role</label>
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Operational Role (Optional)</label>
                   <input 
                     type="text" placeholder="e.g. Strategist"
-                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium text-white"
                     value={formData.jobOrStudy} onChange={e => setFormData({...formData, jobOrStudy: e.target.value})}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Contact Number (Optional)</label>
+                  <input 
+                    type="tel" placeholder="+1 (555) 000-0000"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium text-white"
+                    value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Email Address (Optional)</label>
+                  <input 
+                    type="email" placeholder="contact@lineage.pro"
+                    className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-2xl p-4 outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 focus:border-[var(--color-accent)] transition-all font-medium text-white"
+                    value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-4 mt-12 relative z-10">
+            <div className="flex justify-end gap-4 mt-12 relative z-10 border-t border-[var(--color-border)] pt-8">
               <button 
                 type="button" onClick={() => setShowModal(false)}
-                className="px-8 py-4 rounded-2xl bg-[var(--color-bg)] border border-[var(--color-border)] hover:bg-[var(--color-border)] transition-all font-bold text-sm"
+                className="px-8 py-4 rounded-2xl bg-[var(--color-bg)] border border-[var(--color-border)] hover:bg-[var(--color-border)] transition-all font-bold text-sm text-white"
               >
                 Abort
               </button>

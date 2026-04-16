@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getUserFamilies, createFamily } from '../services/firestore.service';
+import { getUserFamilies, createFamily, updateFamily } from '../services/firestore.service';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, LogOut, Users, Calendar } from 'lucide-react';
+import { PlusCircle, LogOut, Users, Calendar, Globe, Lock, Shield, Eye } from 'lucide-react';
 import { formatFirestoreDate } from '../utils/dateUtils';
 
 export default function Dashboard() {
@@ -45,6 +45,17 @@ export default function Dashboard() {
     }
   };
 
+  const handleTogglePrivacy = async (e, family) => {
+    e.stopPropagation();
+    try {
+      const newStatus = !family.isPublic;
+      await updateFamily(family.id, { isPublic: newStatus });
+      setFamilies(families.map(f => f.id === family.id ? { ...f, isPublic: newStatus } : f));
+    } catch (error) {
+      console.error('Failed to toggle privacy:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] p-4 md:p-8 selection:bg-[var(--color-accent)] selection:text-white">
       <div className="max-w-6xl mx-auto">
@@ -63,13 +74,22 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <button 
-            onClick={logout} 
-            className="flex items-center gap-2 bg-[var(--color-bg)] hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)] px-6 py-3 rounded-2xl transition-all border border-[var(--color-border)] hover:border-[var(--color-danger)]/50 font-bold text-sm"
-          >
-            <LogOut size={18} />
-            Sign Out
-          </button>
+          <div className="flex items-center gap-3 pointer-events-auto">
+            <button 
+              onClick={() => navigate('/explore')} 
+              className="flex items-center gap-2 bg-[var(--color-bg)] hover:bg-[var(--color-accent)]/10 hover:text-[var(--color-accent)] px-6 py-3 rounded-2xl transition-all border border-[var(--color-border)] hover:border-[var(--color-accent)]/50 font-bold text-sm"
+            >
+              <Eye size={18} />
+              Explorer
+            </button>
+            <button 
+              onClick={logout} 
+              className="flex items-center gap-2 bg-[var(--color-bg)] hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)] px-6 py-3 rounded-2xl transition-all border border-[var(--color-border)] hover:border-[var(--color-danger)]/50 font-bold text-sm"
+            >
+              <LogOut size={18} />
+              Sign Out
+            </button>
+          </div>
         </header>
 
         <section className="bg-[var(--color-surface)] rounded-3xl p-8 shadow-2xl mb-12 border border-[var(--color-border)] relative overflow-hidden">
@@ -133,10 +153,20 @@ export default function Dashboard() {
                   onClick={() => navigate(`/family/${f.id}`)}
                   className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-8 hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_30px_rgba(37,99,235,0.1)] transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between h-56"
                 >
+                  <div className="absolute top-4 right-4 z-10">
+                    <button 
+                      onClick={(e) => handleTogglePrivacy(e, f)}
+                      className={`p-2 rounded-xl border transition-all ${f.isPublic ? 'bg-blue-500/10 border-blue-500/50 text-blue-400' : 'bg-orange-500/10 border-orange-500/50 text-orange-400'}`}
+                      title={f.isPublic ? 'Public Lineage' : 'Private Lineage'}
+                    >
+                      {f.isPublic ? <Globe size={16} /> : <Lock size={16} />}
+                    </button>
+                  </div>
+                  
                   <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--color-accent)] opacity-[0.02] rounded-full blur-2xl -mr-16 -mt-16 group-hover:opacity-[0.05] transition-opacity"></div>
                   
                   <div>
-                    <h3 className="text-xl font-black group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-tight">
+                    <h3 className="text-xl font-black group-hover:text-[var(--color-accent)] transition-colors line-clamp-2 leading-tight pr-8">
                       {f.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-2 text-[var(--color-text-dim)] text-xs font-medium">

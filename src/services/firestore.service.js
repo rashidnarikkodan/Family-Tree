@@ -202,7 +202,6 @@ export const getFamilyMembers = async (familyId) => {
 };
 
 export const updateFamilyMember = async (memberId, updateData) => {
-  ensureDb();
   getAuthUser();
 
   if (!memberId) {
@@ -212,10 +211,12 @@ export const updateFamilyMember = async (memberId, updateData) => {
   try {
     const memberRef = doc(db, 'members', memberId);
 
-    await updateDoc(memberRef, {
+    const dataToUpdate = {
       ...updateData,
       updatedAt: serverTimestamp()
-    });
+    };
+
+    await updateDoc(memberRef, dataToUpdate);
 
   } catch (error) {
     console.error('updateFamilyMember error:', error);

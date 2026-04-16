@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import FamilyGraphView from './pages/FamilyGraphView';
+import Explore from './pages/Explore';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -23,6 +24,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/explore" 
+            element={
+              <ProtectedRoute>
+                <Explore />
               </ProtectedRoute>
             } 
           />

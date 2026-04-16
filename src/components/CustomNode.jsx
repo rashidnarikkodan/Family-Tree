@@ -1,10 +1,10 @@
 import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { calculateAge } from '../utils/dateUtils';
-import { User, Briefcase, Calendar, Trash2, Heart, Baby, Edit2 } from 'lucide-react';
+import { User, Briefcase, Calendar, Trash2, Heart, Baby, Edit2, Phone, Mail, UserRound } from 'lucide-react';
 
 const CustomNode = ({ data, selected }) => {
-  const { name, dob, jobOrStudy, generationLevel, onAddRelative, onDeleteMember, onEditMember } = data;
+  const { name, dob, jobOrStudy, generationLevel, gender, phone, email, onAddRelative, onDeleteMember, onEditMember } = data;
   const age = calculateAge(dob);
 
   // Classic Standard Colors for Generations
@@ -21,6 +21,12 @@ const CustomNode = ({ data, selected }) => {
 
   const accentColor = getGenerationColor();
 
+  const getGenderStyle = () => {
+    if (gender === 'male') return 'text-blue-400';
+    if (gender === 'female') return 'text-pink-400';
+    return 'text-white/60';
+  };
+
   return (
     <div 
       className={`
@@ -36,21 +42,24 @@ const CustomNode = ({ data, selected }) => {
       
       {/* Generation Accent Bar */}
       <div 
-        className="h-1.5 w-full" 
-        style={{ backgroundColor: accentColor }}
-      />
+        className="h-1.5 w-full flex" 
+      >
+        <div className="h-full flex-1" style={{ backgroundColor: accentColor }} />
+        {gender === 'male' && <div className="h-full w-2 bg-blue-500" />}
+        {gender === 'female' && <div className="h-full w-2 bg-pink-500" />}
+      </div>
 
       <div className="p-5 flex flex-col gap-4">
         {/* Header Section */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5">
-              <User size={20} className="text-white/60" />
+            <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 ${getGenderStyle()}`}>
+              <UserRound size={20} />
             </div>
             <div>
               <h4 className="text-base font-bold text-white tracking-tight">{name || 'Unnamed Record'}</h4>
-              <p className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: accentColor }}>
-                Generation {generationLevel || 0}
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] opacity-80" style={{ color: accentColor }}>
+                {gender ? `${gender} • ` : ''}Gen {generationLevel || 0}
               </p>
             </div>
           </div>
@@ -73,16 +82,34 @@ const CustomNode = ({ data, selected }) => {
         </div>
 
         {/* Info Grid */}
-        <div className="grid grid-cols-1 gap-2.5">
-          <div className="flex items-center gap-2.5 text-xs text-white/50 font-medium bg-white/[0.02] p-2 rounded-lg">
-            <Calendar size={14} className="text-white/30" />
-            <span>{age !== null ? `${age} yrs` : 'Origin unknown'}</span>
-          </div>
+        <div className="grid grid-cols-1 gap-1.5">
+          {age !== null && (
+            <div className="flex items-center gap-2.5 text-xs text-white/50 font-medium p-1 px-2 rounded-lg">
+              <Calendar size={12} className="text-white/30" />
+              <span>{age} years old</span>
+            </div>
+          )}
           
-          <div className="flex items-center gap-2.5 text-xs text-white/50 font-medium bg-white/[0.02] p-2 rounded-lg">
-            <Briefcase size={14} className="text-white/30" />
-            <span className="truncate">{jobOrStudy || 'Independent'}</span>
-          </div>
+          {jobOrStudy && (
+            <div className="flex items-center gap-2.5 text-xs text-white/50 font-medium p-1 px-2 rounded-lg">
+              <Briefcase size={12} className="text-white/30" />
+              <span className="truncate">{jobOrStudy}</span>
+            </div>
+          )}
+
+          {phone && (
+            <div className="flex items-center gap-2.5 text-xs text-white/50 font-medium p-1 px-2 rounded-lg">
+              <Phone size={12} className="text-white/30" />
+              <span className="truncate">{phone}</span>
+            </div>
+          )}
+
+          {email && (
+            <div className="flex items-center gap-2.5 text-xs text-white/50 font-medium p-1 px-2 rounded-lg">
+              <Mail size={12} className="text-white/30" />
+              <span className="truncate">{email}</span>
+            </div>
+          )}
         </div>
       </div>
 
