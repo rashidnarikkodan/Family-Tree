@@ -12,22 +12,24 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import { useAuth } from '../context/AuthContext';
-import { getFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMember } from '../services/firestore.service';
+import { getFamilyMembers, addFamilyMember, updateFamilyMember, deleteFamilyMember, getFamilyById } from '../services/firestore.service';
 import CustomNode from '../components/CustomNode';
-import { ArrowLeft, UserPlus, Sparkles, Plus } from 'lucide-react';
+import { ArrowLeft, UserPlus, Sparkles, Plus, ShieldAlert, Globe } from 'lucide-react';
 
 const nodeTypes = {
   person: CustomNode,
 };
 
 export default function FamilyGraphView() {
-  const { familyId } = useParams();
   const { user } = useAuth();
+  const { familyId } = useParams();
   const navigate = useNavigate();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
+  const [family, setFamily] = useState(null);
+  const [error, setError] = useState(null);
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -35,132 +37,163 @@ export default function FamilyGraphView() {
   const [newNodeRole, setNewNodeRole] = useState(null); // 'root', 'child', 'spouse'
   const [activeNode, setActiveNode] = useState(null); // Parent, Spouse or Node being edited
 
-  const [formData, setFormData] = useState({ name: '', dob: '', jobOrStudy: '' });
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    dob: '', 
+    jobOrStudy: '',
+    gender: 'male',
+    phone: '',
+    email: ''
+  });
 
   const loadGraph = useCallback(async () => {
     setLoading(true);
-    const members = await getFamilyMembers(familyId);
-    
-    const gMap = {};
-    const memberMap = {};
-    const childrenOf = {}; // parentId -> [memberIds]
-    
-    members.forEach(m => {
-      const g = m.generationLevel || 0;
-      if (!gMap[g]) gMap[g] = [];
-      gMap[g].push(m);
-      memberMap[m.id] = m;
-      
-      if (m.parentId) {
-        if (!childrenOf[m.parentId]) childrenOf[m.parentId] = [];
-        childrenOf[m.parentId].push(m.id);
+    setError(null);
+    try {
+      const familyData = await getFamilyById(familyId);
+      if (!familyData) {
+        setError('Lineage not found in the archives.');
+        setLoading(false);
+        return;
       }
-    });
 
-    const newNodes = [];
-    const newEdges = [];
+      const isOwner = user && familyData.userId === user.uid;
+      
+      // Privacy Check
+      if (!familyData.isPublic && !isOwner) {
+        setError('This lineage is classified as private by its strategist.');
+        setLoading(false);
+        return;
+      }
 
-    // Assign positions based on generation grid
-    Object.keys(gMap).sort((a,b) => a-b).forEach(genStr => {
-      const gen = parseInt(genStr, 10);
-      const rowNodes = gMap[gen];
-      const startX = -(rowNodes.length * 450) / 2;
+      setFamily(familyData);
+      const members = await getFamilyMembers(familyId);
+      
+      const gMap = {};
+      const memberMap = {};
+      const childrenOf = {}; // parentId -> [memberIds]
+      
+      members.forEach(m => {
+        const g = m.generationLevel || 0;
+        if (!gMap[g]) gMap[g] = [];
+        gMap[g].push(m);
+        memberMap[m.id] = m;
+        
+        if (m.parentId) {
+          if (!childrenOf[m.parentId]) childrenOf[m.parentId] = [];
+          childrenOf[m.parentId].push(m.id);
+        }
+      });
 
-      rowNodes.forEach((m, idx) => {
-        newNodes.push({
-          id: m.id,
-          type: 'person',
-          position: m.position || { x: startX + idx * 450, y: gen * 350 },
-          data: {
-            ...m,
-            onAddRelative: (role) => openModal(role, m),
-            onDeleteMember: () => handleDeleteMember(m.id),
-            onEditMember: () => openEditModal(m)
-          }
-        });
+      const newNodes = [];
+      const newEdges = [];
 
-        // 1. Primary Parentage
-        if (m.parentId && memberMap[m.parentId]) {
-          newEdges.push({
-            id: `e-p-${m.parentId}-${m.id}`,
-            source: m.parentId,
-            target: m.id,
-            label: 'Parent',
-            type: 'smoothstep',
-            labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
-            labelBgPadding: [8, 4],
-            labelBgBorderRadius: 4,
-            labelBgStyle: { fill: 'var(--color-accent)', fillOpacity: 0.7 },
-            style: { stroke: 'var(--color-accent)', strokeWidth: 4, opacity: 0.8 },
-            animated: true
+      // Assign positions based on generation grid
+      Object.keys(gMap).sort((a,b) => a-b).forEach(genStr => {
+        const gen = parseInt(genStr, 10);
+        const rowNodes = gMap[gen];
+        const startX = -(rowNodes.length * 450) / 2;
+
+        rowNodes.forEach((m, idx) => {
+          newNodes.push({
+            id: m.id,
+            type: 'person',
+            position: m.position || { x: startX + idx * 450, y: gen * 350 },
+            data: {
+              ...m,
+              onAddRelative: isOwner ? (role) => openModal(role, m) : null,
+              onDeleteMember: isOwner ? () => handleDeleteMember(m.id) : null,
+              onEditMember: isOwner ? () => openEditModal(m) : null
+            }
           });
 
-          // 2. Implicit Shared Parentage (from Parent's Spouse)
-          const primaryParent = memberMap[m.parentId];
-          if (primaryParent.spouseId && memberMap[primaryParent.spouseId]) {
+          // 1. Primary Parentage
+          if (m.parentId && memberMap[m.parentId]) {
             newEdges.push({
-              id: `e-p2-${primaryParent.spouseId}-${m.id}`,
-              source: primaryParent.spouseId,
+              id: `e-p-${m.parentId}-${m.id}`,
+              source: m.parentId,
               target: m.id,
               label: 'Parent',
               type: 'smoothstep',
               labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
               labelBgPadding: [8, 4],
               labelBgBorderRadius: 4,
-              labelBgStyle: { fill: 'var(--color-accent)', fillOpacity: 0.4 },
-              style: { stroke: 'var(--color-accent)', strokeWidth: 2, strokeDasharray: '5,5', opacity: 0.4 },
+              labelBgStyle: { fill: 'var(--color-accent)', fillOpacity: 0.7 },
+              style: { stroke: 'var(--color-accent)', strokeWidth: 4, opacity: 0.8 },
+              animated: true
+            });
+
+            // 2. Implicit Shared Parentage (from Parent's Spouse)
+            const primaryParent = memberMap[m.parentId];
+            if (primaryParent.spouseId && memberMap[primaryParent.spouseId]) {
+              newEdges.push({
+                id: `e-p2-${primaryParent.spouseId}-${m.id}`,
+                source: primaryParent.spouseId,
+                target: m.id,
+                label: 'Parent',
+                type: 'smoothstep',
+                labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
+                labelBgPadding: [8, 4],
+                labelBgBorderRadius: 4,
+                labelBgStyle: { fill: 'var(--color-accent)', fillOpacity: 0.4 },
+                style: { stroke: 'var(--color-accent)', strokeWidth: 2, strokeDasharray: '5,5', opacity: 0.4 },
+              });
+            }
+          }
+
+          // 3. Spousal Connections
+          if (m.spouseId && memberMap[m.spouseId]) {
+            newEdges.push({
+              id: `e-s-${m.id}-${m.spouseId}`,
+              source: m.id,
+              target: m.spouseId,
+              label: 'Spouse',
+              sourceHandle: 'spouse',
+              targetHandle: 'spouse',
+              labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
+              labelBgPadding: [8, 4],
+              labelBgBorderRadius: 4,
+              labelBgStyle: { fill: 'var(--color-danger)', fillOpacity: 0.8 },
+              style: { stroke: 'var(--color-danger)', strokeWidth: 4, strokeDasharray: '8,8', opacity: 0.8 },
+            });
+          }
+        });
+      });
+
+      // 4. Sibling Logical Connections
+      Object.keys(childrenOf).forEach(pid => {
+        const siblings = childrenOf[pid];
+        if (siblings.length > 1) {
+          for (let i = 0; i < siblings.length - 1; i++) {
+            newEdges.push({
+              id: `e-sib-${siblings[i]}-${siblings[i+1]}`,
+              source: siblings[i],
+              target: siblings[i+1],
+              label: 'Sibling',
+              type: 'straight',
+              labelStyle: { fill: '#94a3b8', fontWeight: 700, fontSize: 9 },
+              labelBgPadding: [6, 2],
+              labelBgBorderRadius: 2,
+              labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.9 },
+              style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '4,4', opacity: 0.5 },
             });
           }
         }
-
-        // 3. Spousal Connections
-        if (m.spouseId && memberMap[m.spouseId]) {
-          newEdges.push({
-            id: `e-s-${m.id}-${m.spouseId}`,
-            source: m.id,
-            target: m.spouseId,
-            label: 'Spouse',
-            sourceHandle: 'spouse',
-            targetHandle: 'spouse',
-            labelStyle: { fill: 'white', fontWeight: 700, fontSize: 10 },
-            labelBgPadding: [8, 4],
-            labelBgBorderRadius: 4,
-            labelBgStyle: { fill: 'var(--color-danger)', fillOpacity: 0.8 },
-            style: { stroke: 'var(--color-danger)', strokeWidth: 4, strokeDasharray: '8,8', opacity: 0.8 },
-          });
-        }
       });
-    });
 
-    // 4. Sibling Logical Connections
-    Object.keys(childrenOf).forEach(pid => {
-      const siblings = childrenOf[pid];
-      if (siblings.length > 1) {
-        for (let i = 0; i < siblings.length - 1; i++) {
-          newEdges.push({
-            id: `e-sib-${siblings[i]}-${siblings[i+1]}`,
-            source: siblings[i],
-            target: siblings[i+1],
-            label: 'Sibling',
-            type: 'straight',
-            labelStyle: { fill: '#94a3b8', fontWeight: 700, fontSize: 9 },
-            labelBgPadding: [6, 2],
-            labelBgBorderRadius: 2,
-            labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.9 },
-            style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '4,4', opacity: 0.5 },
-          });
-        }
-      }
-    });
-
-    setNodes(newNodes);
-    setEdges(newEdges);
-    setLoading(false);
-  }, [familyId]);
+      setNodes(newNodes);
+      setEdges(newEdges);
+    } catch (err) {
+      console.error(err);
+      setError('An anomaly occurred while accessing the archives.');
+    } finally {
+      setLoading(false);
+    }
+  }, [familyId, user]);
 
   useEffect(() => {
-    if (user && familyId) loadGraph();
-  }, [user, familyId, loadGraph]);
+    loadGraph();
+  }, [loadGraph]);
 
   const onConnect = useCallback((params) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -257,6 +290,33 @@ export default function FamilyGraphView() {
     }
   };
 
+  const isOwner = user && family && family.userId === user.uid;
+
+  if (loading) return (
+    <div className="w-full h-screen bg-[var(--color-bg)] flex flex-col items-center justify-center gap-6">
+      <div className="w-16 h-16 border-4 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin"></div>
+      <p className="font-black uppercase tracking-widest text-[var(--color-text-dim)] animate-pulse">Syncing Lineage...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="w-full h-screen bg-[var(--color-bg)] flex flex-col items-center justify-center p-8 gap-8">
+      <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/50">
+        <ShieldAlert size={48} className="text-red-500" />
+      </div>
+      <div className="text-center">
+        <h2 className="text-3xl font-black mb-2 uppercase italic text-white">Access Denied</h2>
+        <p className="text-[var(--color-text-dim)] max-w-sm font-medium">{error}</p>
+      </div>
+      <button 
+        onClick={() => navigate('/dashboard')}
+        className="bg-white/5 border border-white/10 px-8 py-3 rounded-2xl hover:bg-white/10 transition-all font-bold"
+      >
+        Return to Safety
+      </button>
+    </div>
+  );
+
   return (
     <div className="w-full h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-text)] relative overflow-hidden selection:bg-[var(--color-accent)] selection:text-white">
       {/* Dynamic Background */}
@@ -267,21 +327,28 @@ export default function FamilyGraphView() {
 
       <header className="absolute top-6 left-6 right-6 z-20 flex items-center justify-between pointer-events-none">
         <div className="flex items-center gap-4 pointer-events-auto">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="w-12 h-12 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center hover:bg-[var(--color-accent)] hover:border-[var(--color-accent)] transition-all shadow-2xl group active:scale-95"
+          <button 
+            onClick={() => navigate(user ? '/dashboard' : '/explore')}
+            className="w-12 h-12 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl flex items-center justify-center hover:bg-[var(--color-accent)] hover:border-[var(--color-accent)] transition-all shadow-2xl group active:scale-95 text-white"
           >
             <ArrowLeft size={20} className="group-hover:translate-x-[-2px] transition-transform" />
           </button>
-          <div className="bg-[var(--color-surface)]/80 backdrop-blur-xl border border-[var(--color-border)] px-6 py-3 rounded-2xl shadow-2xl hidden md:flex items-center gap-3">
-            <Sparkles size={18} className="text-[var(--color-accent)]" />
-            <span className="font-black tracking-tight uppercase text-xs">Family Explorer Pro</span>
+          <div className="bg-[var(--color-surface)]/80 backdrop-blur-xl border border-[var(--color-border)] px-6 py-3 rounded-2xl shadow-2xl flex flex-col">
+            <div className="flex items-center gap-2">
+              <Globe size={14} className={family.isPublic ? "text-blue-400" : "text-orange-400"} />
+              <span className="font-black tracking-tight uppercase text-[10px] opacity-60">
+                {family.isPublic ? 'Public Archive' : 'Private Lineage'}
+              </span>
+            </div>
+            <h1 className="font-black text-lg tracking-tight truncate max-w-[200px] leading-none mt-1">
+              {family.name}
+            </h1>
           </div>
         </div>
 
         <div className="pointer-events-auto flex gap-3">
-          {nodes.length > 0 && (
-            <button
+          {isOwner && nodes.length > 0 && (
+            <button 
               onClick={() => openModal('root')}
               className="bg-[var(--color-accent)] border border-[var(--color-accent)] px-6 py-3 rounded-2xl flex items-center gap-2 hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all font-bold text-sm shadow-2xl active:scale-95 text-white"
             >
@@ -289,8 +356,8 @@ export default function FamilyGraphView() {
               Add Member
             </button>
           )}
-          {nodes.length === 0 && !loading && (
-            <button
+          {isOwner && nodes.length === 0 && (
+            <button 
               onClick={() => openModal('root')}
               className="bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-hover)] text-white px-8 py-4 rounded-2xl flex items-center gap-3 hover:scale-105 transition-all font-black shadow-[0_0_30px_rgba(37,99,235,0.3)] animate-pulse"
             >
@@ -314,8 +381,8 @@ export default function FamilyGraphView() {
           className="bg-transparent"
         >
           <Background color="var(--color-border)" gap={32} size={1} variant="dots" />
-          <Controls
-            className="!bg-[var(--color-surface)] !border-[var(--color-border)] !rounded-2xl !p-2 !shadow-2xl"
+          <Controls 
+            className="!bg-[var(--color-surface)] !border-[var(--color-border)] !rounded-2xl !p-2 !shadow-2xl" 
             showInteractive={false}
           />
           <Panel position="bottom-right" className="bg-[var(--color-surface)]/80 backdrop-blur-md border border-[var(--color-border)] p-3 rounded-2xl shadow-2xl text-[10px] uppercase font-bold tracking-widest text-[var(--color-text-dim)]">
@@ -324,13 +391,12 @@ export default function FamilyGraphView() {
         </ReactFlow>
       </div>
 
-      {showModal && (
+      {showModal && isOwner && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
-          <form
+          <form 
             onSubmit={handleAddMember}
             className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[40px] p-10 w-full max-w-xl shadow-[0_0_100px_rgba(0,0,0,0.5)] relative overflow-hidden"
           >
-            {/* Modal Glow */}
             <div className="absolute -top-32 -left-32 w-64 h-64 bg-[var(--color-accent)] opacity-20 rounded-full blur-[80px]"></div>
             <h3 className="text-3xl font-black mb-8 relative z-10">
               {isEditing ? 'Recalibrate Lineage' : (newNodeRole === 'root' ? 'Initialize Ancestry' : `Expand Lineage: ${newNodeRole}`)}
@@ -346,7 +412,6 @@ export default function FamilyGraphView() {
                     value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Biological Gender</label>
                   <select 
@@ -358,7 +423,6 @@ export default function FamilyGraphView() {
                     <option value="other">Other</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Origin Date (Optional)</label>
                   <input 
@@ -368,8 +432,7 @@ export default function FamilyGraphView() {
                     style={{ colorScheme: 'dark' }}
                   />
                 </div>
-
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Operational Role (Optional)</label>
                   <input 
                     type="text" placeholder="e.g. Strategist"
@@ -377,7 +440,6 @@ export default function FamilyGraphView() {
                     value={formData.jobOrStudy} onChange={e => setFormData({...formData, jobOrStudy: e.target.value})}
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Contact Number (Optional)</label>
                   <input 
@@ -386,8 +448,7 @@ export default function FamilyGraphView() {
                     value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}
                   />
                 </div>
-
-                <div className="md:col-span-2">
+                <div>
                   <label className="block text-xs font-bold mb-3 text-[var(--color-text-dim)] uppercase tracking-widest">Email Address (Optional)</label>
                   <input 
                     type="email" placeholder="contact@lineage.pro"
@@ -397,7 +458,6 @@ export default function FamilyGraphView() {
                 </div>
               </div>
             </div>
-
             <div className="flex justify-end gap-4 mt-12 relative z-10 border-t border-[var(--color-border)] pt-8">
               <button 
                 type="button" onClick={() => setShowModal(false)}

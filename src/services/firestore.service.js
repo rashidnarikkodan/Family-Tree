@@ -174,9 +174,17 @@ export const addFamilyMember = async (familyId, memberData) => {
   }
 };
 
+export const getFamilyById = async (familyId) => {
+  ensureDb();
+  if (!familyId) throw new Error('familyId is required');
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+};
+
 export const getFamilyMembers = async (familyId) => {
   ensureDb();
-  getAuthUser();
+  // Removed getAuthUser() to allow public exploration
 
   if (!familyId) {
     throw new Error('familyId is required');

@@ -27,22 +27,8 @@ export default function App() {
               </ProtectedRoute>
             } 
           />
-          <Route 
-            path="/explore" 
-            element={
-              <ProtectedRoute>
-                <Explore />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/family/:familyId" 
-            element={
-              <ProtectedRoute>
-                <FamilyGraphView />
-              </ProtectedRoute>
-            } 
-          />
+          <Route path="/explore" element={<Explore />} />
+          <Route path="/family/:familyId" element={<FamilyGraphView />} />
         </Routes>
       </AuthProvider>
     </Router>
