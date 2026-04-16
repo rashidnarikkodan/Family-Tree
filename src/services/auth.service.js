@@ -8,14 +8,24 @@ import {
 } from 'firebase/auth';
 import { auth } from './firebase';
 
-const googleProvider = new GoogleAuthProvider();
 
-export const loginWithGoogle = async () => {
+const provider = new GoogleAuthProvider();
+
+export const signInWithGoogle = async () => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
+    const result = await signInWithPopup(auth, provider);
+
+    const user = result.user;
+
+    return {
+      uid: user.uid,
+      email: user.email,
+      name: user.displayName,
+      avatar: user.photoURL,
+    };
+
   } catch (error) {
-    console.error("Error signing in with Google", error);
+    console.error("Google Sign-In Error:", error.code, error.message);
     throw error;
   }
 };
