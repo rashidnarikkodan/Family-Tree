@@ -99,6 +99,7 @@ export default function Login() {
             </div>
           )}
           
+          
           <form onSubmit={handleEmailAuth} className="space-y-5">
             <div>
               <label className="block text-xs font-bold mb-2 text-[var(--color-text-dim)] uppercase tracking-widest pl-1">Email Address</label>
@@ -160,6 +161,15 @@ export default function Login() {
               className="text-[var(--color-accent)] hover:text-[var(--color-hover)] hover:underline font-bold"
             >
               {isRegister ? 'Sign in' : 'Create account'}
+            </button>
+          </p>
+
+          <p className="mt-4 text-center text-sm text-[var(--color-text-dim)]">
+            <button 
+              onClick={() => navigate('/explore')} 
+              className="text-[var(--color-accent)] hover:text-[var(--color-hover)] hover:underline font-bold"
+            >
+              Explore without signing in
             </button>
           </p>
         </div>
