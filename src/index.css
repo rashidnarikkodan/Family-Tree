@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg:           #0F172A;   /* Canvas background */
+  --color-node-900:     #1E3A8A;   /* Root ancestor / important nodes */
+  --color-node-700:     #1D4ED8;   /* Parents */
+  --color-node-500:     #3B82F6;   /* Standard person nodes */
+  --color-node-300:     #93C5FD;   /* Younger generation */
+  --color-node-100:     #DBEAFE;   /* distant/extended members */
+  --color-edge:         #64748B;   /* relationship edges */
+  --color-edge-active:  #38BDF8;   /* highlighted relationship */
+  --color-text:         #F9FAFB;   /* node text */
+  --color-border:       #1F2937;   /* node border */
+  --color-hover:        #60A5FA;   /* hover state */
+  --color-selected:     #FACC15;   /* selected node */
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
