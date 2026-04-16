@@ -79,22 +79,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center p-4 selection:bg-[var(--color-selected)] selection:text-white">
+    <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center p-4 selection:bg-[var(--color-selected)] selection:text-white relative">
+      <button 
+        onClick={() => navigate('/explore')} 
+        className="absolute top-4 right-4 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition-all"
+      >
+        Explorer <ArrowRight size={16} />
+      </button>
+      
       <div className="bg-[var(--color-surface)] max-w-md w-full rounded-3xl p-10 shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-[var(--color-border)] text-[var(--color-text)] relative overflow-hidden">
         {/* Decorative elements */}
         <div className="absolute -top-24 -left-24 w-48 h-48 bg-[var(--color-accent)] opacity-10 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[var(--color-danger)] opacity-10 rounded-full blur-3xl"></div>
         
         <div className="relative z-10">
-          <div className="absolute top-4 right-4">
-            <button 
-              onClick={() => navigate('/explore')} 
-              className="bg-[var(--color-bg)] hover:bg-[var(--color-border)] border border-[var(--color-border)] text-[var(--color-text)] px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition-all"
-            >
-              Explorer <ArrowRight size={16} />
-            </button>
-          </div>
-          
           <h2 className="text-4xl font-black mb-2 text-center bg-clip-text text-transparent bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-danger)]">
             Connect
           </h2>
