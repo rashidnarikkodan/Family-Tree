@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, ArrowRight } from 'lucide-react';
+import { LogIn, UserPlus, ArrowRight, Globe } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Login() {
   const { user, authError, loginWithGoogle, loginEmailPassword, registerEmailPassword } = useAuth();
@@ -50,10 +51,17 @@ export default function Login() {
     try {
       const result = await loginWithGoogle();
       if (result) {
+        toast.success('Access Granted', {
+          description: `Welcome back, ${result.user.displayName || 'Explorer'}.`
+        });
         navigate('/dashboard');
       }
     } catch (e) {
-      setError(getAuthErrorMessage(e.code, e.message));
+      const errorMsg = getAuthErrorMessage(e.code, e.message);
+      setError(errorMsg);
+      toast.error('Authentication Failed', {
+        description: errorMsg
+      });
     } finally {
       setSubmitting(false);
     }
@@ -67,12 +75,22 @@ export default function Login() {
     try {
       if (isRegister) {
         await registerEmailPassword(email, password);
+        toast.success('Account Created', {
+          description: 'Welcome to the Family Tree Explorer network.'
+        });
       } else {
         await loginEmailPassword(email, password);
+        toast.success('Access Granted', {
+          description: 'Identity verified. Accessing your dashboard.'
+        });
       }
       navigate('/dashboard');
     } catch (e) {
-      setError(getAuthErrorMessage(e.code, e.message));
+      const errorMsg = getAuthErrorMessage(e.code, e.message);
+      setError(errorMsg);
+      toast.error('Authentication Failed', {
+        description: errorMsg
+      });
     } finally {
       setSubmitting(false);
     }
@@ -80,11 +98,13 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center p-4 selection:bg-[var(--color-selected)] selection:text-white relative">
+      {/* Guest explore shortcut — top-right pill */}
       <button 
         onClick={() => navigate('/explore')} 
-        className="absolute top-4 right-4 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition-all"
+        className="absolute top-4 right-4 flex items-center gap-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white/60 hover:text-white px-4 py-2 rounded-xl text-xs font-bold transition-all"
       >
-        Explorer <ArrowRight size={16} />
+        <Globe size={13} />
+        Browse public families
       </button>
       
       <div className="bg-[var(--color-surface)] max-w-md w-full rounded-3xl p-10 shadow-[0_0_50px_rgba(37,99,235,0.1)] border border-[var(--color-border)] text-[var(--color-text)] relative overflow-hidden">
@@ -170,6 +190,19 @@ export default function Login() {
               {isRegister ? 'Sign in' : 'Create account'}
             </button>
           </p>
+
+          {/* Guest CTA */}
+          <div className="mt-8 pt-6 border-t border-[var(--color-border)] text-center">
+            <p className="text-xs text-[var(--color-text-dim)] mb-3 font-medium">Just browsing?</p>
+            <button
+              onClick={() => navigate('/explore')}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-[var(--color-border)] hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-accent)]/5 hover:text-[var(--color-accent)] text-[var(--color-text-dim)] text-sm font-bold transition-all group"
+            >
+              <Globe size={15} />
+              Explore public family trees
+              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

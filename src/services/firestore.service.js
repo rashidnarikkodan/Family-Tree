@@ -157,7 +157,9 @@ export const addFamilyMember = async (familyId, memberData) => {
       email: memberData.email || '',
       generationLevel: memberData.generationLevel || 0,
       parentId: memberData.parentId || null,
+      parentLabel: memberData.parentLabel || null,
       spouseId: memberData.spouseId || null,
+      spouseLabel: memberData.spouseLabel || null,
       position: memberData.position || { x: 0, y: 0 },
       createdAt: serverTimestamp()
     });
@@ -177,14 +179,20 @@ export const addFamilyMember = async (familyId, memberData) => {
 export const getFamilyById = async (familyId) => {
   ensureDb();
   if (!familyId) throw new Error('familyId is required');
+
   const familyRef = doc(db, 'families', familyId);
-  const snap = await getDoc(familyRef);
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  try {
+    const snap = await getDoc(familyRef);
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  } catch (error) {
+    console.error('getFamilyById error:', error);
+    throw error;
+  }
 };
 
 export const getFamilyMembers = async (familyId) => {
   ensureDb();
-  // Removed getAuthUser() to allow public exploration
+  // No auth check — allows public exploration of public families
 
   if (!familyId) {
     throw new Error('familyId is required');

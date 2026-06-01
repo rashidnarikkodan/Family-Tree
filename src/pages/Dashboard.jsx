@@ -4,6 +4,7 @@ import { getUserFamilies, createFamily, updateFamily } from '../services/firesto
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, LogOut, Users, Calendar, Globe, Lock, Shield, Eye } from 'lucide-react';
 import { formatFirestoreDate } from '../utils/dateUtils';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -25,7 +26,11 @@ export default function Dashboard() {
       setFamilies(f);
     } catch (error) {
       console.error(error);
-      setError(error.message || 'Unable to load your family trees.');
+      const msg = error.message || 'Unable to load your family trees.';
+      setError(msg);
+      toast.error('Sync Failure', {
+        description: msg
+      });
     } finally {
       setLoading(false);
     }
@@ -34,14 +39,26 @@ export default function Dashboard() {
   const handleCreateFamily = async (e) => {
     e.preventDefault();
     setError('');
-    if (!newFamilyName.trim()) return;
+    if (!newFamilyName.trim()) {
+      toast.warning('Lineage Title Required', {
+        description: 'Please provide a name for the new family tree collection.'
+      });
+      return;
+    }
     try {
       const family = await createFamily(newFamilyName);
       setFamilies([...families, family]);
       setNewFamilyName('');
+      toast.success('Lineage Initialized', {
+        description: `${newFamilyName} has been added to your collection.`
+      });
     } catch (error) {
       console.error(error);
-      setError(error.message || 'Unable to create family.');
+      const msg = error.message || 'Unable to create family.';
+      setError(msg);
+      toast.error('Initialization Failure', {
+        description: msg
+      });
     }
   };
 
@@ -51,8 +68,14 @@ export default function Dashboard() {
       const newStatus = !family.isPublic;
       await updateFamily(family.id, { isPublic: newStatus });
       setFamilies(families.map(f => f.id === family.id ? { ...f, isPublic: newStatus } : f));
+      toast.success(newStatus ? 'Archive Publicized' : 'Archive Privatized', {
+        description: `${family.name} is now ${newStatus ? 'visible to everyone' : 'restricted to you'}.`
+      });
     } catch (error) {
       console.error('Failed to toggle privacy:', error);
+      toast.error('Privacy Update Failure', {
+        description: 'The security protocols could not be updated.'
+      });
     }
   };
 
